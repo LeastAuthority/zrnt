@@ -38,6 +38,19 @@ type EffectiveBalances interface {
 	SumEffectiveBalanceOf(indices []ValidatorIndex) (sum Gwei)
 }
 
+type EffectiveBalancesFake struct {
+	EffectiveBalanceFunc      func(index ValidatorIndex) Gwei
+	SumEffectiveBalanceOfFunc func(indices []ValidatorIndex) (sum Gwei)
+}
+
+func (e EffectiveBalancesFake) EffectiveBalance(index ValidatorIndex) Gwei {
+	return e.EffectiveBalanceFunc(index)
+}
+
+func (e EffectiveBalancesFake) SumEffectiveBalanceOf(indices []ValidatorIndex) Gwei {
+	return e.SumEffectiveBalanceOfFunc(indices)
+}
+
 type EffectiveBalancesUpdate interface {
 	UpdateEffectiveBalances()
 }
@@ -102,6 +115,34 @@ type Versioning interface {
 	GetDomain(dom BLSDomainType, messageEpoch Epoch) BLSDomain
 }
 
+type VersioningFake struct {
+	CurrentSlotFunc    func() Slot
+	CurrentEpochFunc   func() Epoch
+	PreviousEpochFunc  func() Epoch
+	CurrentVersionFunc func() Version
+	GetDomainFunc      func(dom BLSDomainType, messageEpoch Epoch) BLSDomain
+}
+
+func (f VersioningFake) CurrentSlot() Slot {
+	return f.CurrentSlotFunc()
+}
+
+func (f VersioningFake) CurrentEpoch() Epoch {
+	return f.CurrentEpochFunc()
+}
+
+func (f VersioningFake) CurrentVersion() Version {
+	return f.CurrentVersionFunc()
+}
+
+func (f VersioningFake) PreviousEpoch() Epoch {
+	return f.PreviousEpochFunc()
+}
+
+func (f VersioningFake) GetDomain(dom BLSDomainType, messageEpoch Epoch) BLSDomain {
+	return f.GetDomainFunc(dom, messageEpoch)
+}
+
 type Eth1Voting interface {
 	ResetEth1Votes()
 }
@@ -145,6 +186,14 @@ type EpochSeed interface {
 	GetSeed(epoch Epoch, domainType BLSDomainType) Root
 }
 
+type EpochSeedFake struct {
+	GetSeedFunc func(epoch Epoch, domainType BLSDomainType) Root
+}
+
+func (f EpochSeedFake) GetSeed(epoch Epoch, domainType BLSDomainType) Root {
+	return f.GetSeedFunc(epoch, domainType)
+}
+
 type Proposers interface {
 	GetBeaconProposerIndex(slot Slot) ValidatorIndex
 }
@@ -172,12 +221,46 @@ type ActiveIndices interface {
 	ComputeActiveIndexRoot(epoch Epoch) Root
 }
 
+type ActiveIndicesFake struct {
+	IsActiveFunc                  func(index ValidatorIndex, epoch Epoch) bool
+	GetActiveValidatorIndicesFunc func(epoch Epoch) RegistryIndices
+	ComputeActiveIndexRootFunc    func(epoch Epoch) Root
+}
+
+func (f ActiveIndicesFake) IsActive(index ValidatorIndex, epoch Epoch) bool {
+	return f.IsActiveFunc(index, epoch)
+}
+
+func (f ActiveIndicesFake) GetActiveValidatorIndices(epoch Epoch) RegistryIndices {
+	return f.GetActiveValidatorIndicesFunc(epoch)
+}
+
+func (f ActiveIndicesFake) ComputeActiveIndexRoot(epoch Epoch) Root {
+	return f.ComputeActiveIndexRootFunc(epoch)
+}
+
 type CommitteeCount interface {
 	GetCommitteeCountAtSlot(slot Slot) uint64
 }
 
+type CommitteeCountFake struct {
+	GetCommitteeCountAtSlotFunc func(slot Slot) uint64
+}
+
+func (f CommitteeCountFake) GetCommitteeCountAtSlot(slot Slot) uint64 {
+	return f.GetCommitteeCountAtSlotFunc(slot)
+}
+
 type BeaconCommittees interface {
 	GetBeaconCommittee(slot Slot, index CommitteeIndex) []ValidatorIndex
+}
+
+type BeaconCommitteesFake struct {
+	GetBeaconCommitteeFunc func(slot Slot, index CommitteeIndex) []ValidatorIndex
+}
+
+func (f BeaconCommitteesFake) GetBeaconCommittee(slot Slot, index CommitteeIndex) []ValidatorIndex {
+	return f.GetBeaconCommitteeFunc(slot, index)
 }
 
 type Randao interface {
