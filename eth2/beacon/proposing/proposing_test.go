@@ -8,17 +8,7 @@ import (
 	"github.com/protolambda/zrnt/eth2/meta"
 )
 
-const curEpoch = 42
-
-/*
-used functions:
-- currentEpoch (Versioning)
-- effectiveBalance (EffectiveBalances)
-- GetSeed (EpochSeed)
-- GetActiveValidatorIndices (ActiveIndices)
-*/
-
-func TestHelloWorld(t *testing.T) {
+func TestProposerDistribution(t *testing.T) {
 	const N = 1000
 
 	var (
@@ -36,7 +26,8 @@ func TestHelloWorld(t *testing.T) {
 		counts[int(idx)]++
 	}
 
-	t.Log(counts)
+	t.Log("balances:", balances)
+	t.Log("counts of election:", counts)
 }
 
 func seqVI(start, end ValidatorIndex) []ValidatorIndex {
@@ -52,6 +43,8 @@ func newFeature(balances []Gwei) *ProposingFeature {
 		e  Epoch
 		dt BLSDomainType
 	}
+
+	const curEpoch = 42
 
 	var (
 		validatorCount = ValidatorIndex(len(balances))
