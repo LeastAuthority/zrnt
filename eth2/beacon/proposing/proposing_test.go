@@ -3,6 +3,7 @@ package proposing
 import (
 	"crypto/rand"
 	"fmt"
+	"os"
 	"testing"
 
 	. "github.com/protolambda/zrnt/eth2/core"
@@ -30,55 +31,186 @@ const (
 )
 
 func TestProposerDistribution(t *testing.T) {
-	const times = 32
-	var ratios = make(chan float32, times)
+	const (
+		times = 48
+		N     = Mi
+	)
 
-	for i := 0; i < times; i++ {
-		for _, tc := range []distTestCase{
-			{name: fmt.Sprintf("N:1Mi-bBlnc:32Gi-lBlnc:32-i:%d", i), n: 1 * Mi, bigBlnc: 32 * Gi, lilBlnc: 16 * Gi},
-		} {
-			t.Run(tc.String(), tc.makeTest(ratios))
+	var (
+		tcs = []distTestCase{
+			{
+				Name:           "blll",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 4,
+			},
+			{
+				Name:           "lbll",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 4,
+				BigOffset:      1,
+			},
+			{
+				Name:           "blll..8",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 8,
+			},
+			{
+				Name:           "lbll..8",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 8,
+				BigOffset:      1,
+			},
+			{
+				Name:           "blll..16",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 16,
+			},
+			{
+				Name:           "lbll..16",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 16,
+				BigOffset:      1,
+			},
+			{
+				Name:           "blll..32",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 32,
+			},
+			{
+				Name:           "lbll..32",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 32,
+				BigOffset:      1,
+			},
+			{
+				Name:           "blll..64",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 64,
+			},
+			{
+				Name:           "lbll..64",
+				N:              N,
+				BigBalance:     32 * Gi,
+				SmallBalance:   16 * Gi,
+				ValidatorCount: 64,
+				BigOffset:      1,
+			},
 		}
+		results = make(chan distTestResult, times*len(tcs))
+	)
+
+	f, err := os.Create("results")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	var ratioAvg float32
-	for i := 0; i < times; i++ {
-		ratioAvg += <-ratios
-	}
-	ratioAvg = ratioAvg / times
+	t.Run("manage", func(t *testing.T) {
+		t.Parallel()
+		defer f.Close()
 
-	t.Logf("The 32 ETH validator gets elected %f times as often as any of the 16 ETH validators (expected: 32/16=2).", ratioAvg)
+		var (
+			ratioAvgs  = make(map[string]float32)
+			doneMap    = make(map[string]int)
+			res        distTestResult
+			resultList []distTestResult
+		)
+
+		for i := 0; i < times*len(tcs); i++ {
+			res = <-results
+
+			ratioAvgs[res.Name] += float32(res.BigCount()) / float32(res.SmallCountAvg()) / times
+			doneMap[res.Name] += 1
+			resultList = append(resultList, res)
+
+			if doneMap[res.Name] == times {
+				fmt.Fprintf(f, "%s,%d,%d,%f\n", res.Name, res.BigCount(), res.SmallCountAvg(), ratioAvgs[res.Name])
+			}
+		}
+
+		t.Log(ratioAvgs)
+	})
+
+	for _, tc := range tcs {
+
+		tc := tc
+		t.Run(tc.String(), func(t *testing.T) {
+			for i := 0; i < times; i++ {
+				t.Run(fmt.Sprint(i), tc.makeTest(i, results))
+			}
+		})
+	}
+
+}
+
+type distTestResult struct {
+	distTestCase
+
+	Round  int
+	Counts []int
+}
+
+func (tr distTestResult) BigCount() int {
+	return tr.Counts[tr.BigOffset]
+}
+
+func (tr distTestResult) SmallCountAvg() int {
+	return (sum(tr.Counts) - tr.Counts[tr.BigOffset]) / (tr.ValidatorCount - 1)
 }
 
 type distTestCase struct {
-	name             string
-	n                int
-	bigBlnc, lilBlnc Gwei
+	Name                     string
+	N                        int
+	BigBalance, SmallBalance Gwei
+	ValidatorCount           int
+	BigOffset                int
 }
 
 func (tc distTestCase) String() string {
-	return tc.name
+	return tc.Name
 }
 
-func (tc distTestCase) makeTest(ratios chan<- float32) func(*testing.T) {
+func (tc distTestCase) makeTest(round int, results chan<- distTestResult) func(*testing.T) {
 	return func(t *testing.T) {
-		//t.Parallel()
+		t.Parallel()
 
 		var (
-			N              = tc.n
-			lilBlnc        = tc.lilBlnc
-			bigBlnc        = tc.bigBlnc
-			balances       = []Gwei{bigBlnc, lilBlnc, lilBlnc, lilBlnc, lilBlnc, lilBlnc, lilBlnc, lilBlnc}
+			balances       = make([]Gwei, tc.ValidatorCount)
 			counts         = make([]int, len(balances))
-			prop           = newFeature(balances)
 			validatorCount = ValidatorIndex(len(balances))
+			prop           = newFeature(balances)
 		)
 
-		l := len(fmt.Sprintf("%d", N))
+		// populate balances
+		for i := range balances {
+			balances[i] = tc.SmallBalance
+		}
+		balances[tc.BigOffset] = tc.BigBalance
+
+		// prepare logging format strings
+		l := len(fmt.Sprintf("%d", tc.N))
 		formatN := fmt.Sprintf("N=%%%dd\n", l)
 		formatI := fmt.Sprintf("i=%%%dd\n", l)
-		fmt.Printf(formatN, N)
-		for i := 0; i < N; i++ {
+
+		fmt.Printf(formatN, tc.N)
+		for i := 0; i < tc.N; i++ {
 			if i&0xffff == 0 {
 				fmt.Printf(formatI, i)
 			}
@@ -90,21 +222,23 @@ func (tc distTestCase) makeTest(ratios chan<- float32) func(*testing.T) {
 			counts[int(idx)]++
 		}
 
-		t.Log("balances:", balances)
-		t.Log("counts of election:", counts)
+		results <- distTestResult{
+			distTestCase: tc,
+			Round:        round,
+			Counts:       counts,
+		}
 
 		var (
-			smallAvg      = sum(counts[1:]) / 7
-			countFactor   = float32(counts[0]) / float32(smallAvg)
-			depositFactor = float32(balances[0]) / float32(balances[1])
+			smallAvg      = (sum(counts) - counts[tc.BigOffset]) / (len(balances) - 1)
+			countFactor   = float32(counts[tc.BigOffset]) / float32(smallAvg)
+			depositFactor = float32(balances[1]) / float32(balances[0])
 		)
 
-		ratios <- countFactor
-
+		t.Log("count of big validator:", counts[tc.BigOffset])
 		t.Log("average of small validators:", smallAvg)
 		t.Log("large validator count is ahead by factor:", countFactor)
 		t.Log("large validator deposit is ahead by factor:", depositFactor)
-		t.Log("averate iterations between election of single little validator:", N/smallAvg)
+		t.Log("averate iterations between election of single little validator:", tc.N/smallAvg)
 	}
 }
 
